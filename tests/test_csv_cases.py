@@ -1,8 +1,9 @@
-"""Кейсы из внешнего файла: pytest_generate_tests.
+"""Cases loaded from an external file: pytest_generate_tests.
 
-Набор данных живёт в CSV, а не в коде. QA может дописать строку в таблицу,
-не открывая Python, — и в отчёте появится новый кейс. Так же поступают, когда
-тест-кейсы ведут в TestRail или в Google Sheet и выгружают их в файл.
+The data set lives in a CSV instead of the code. A tester can add a row to the
+spreadsheet without opening Python, and a new case appears in the report. This
+is the same route used when cases live in TestRail or a Google Sheet and are
+exported to a file.
 """
 
 import csv
@@ -30,7 +31,7 @@ def _load_cases() -> list[dict]:
 
 
 def pytest_generate_tests(metafunc):
-    """Хук: если тесту нужна фикстура product_case — подставляем все строки CSV."""
+    """Hook: if a test asks for product_case, feed it every row of the CSV."""
     if "product_case" in metafunc.fixturenames:
         cases = _load_cases()
         metafunc.parametrize(

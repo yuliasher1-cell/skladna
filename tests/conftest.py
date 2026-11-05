@@ -1,16 +1,16 @@
-"""Общие фикстуры для всех тестов.
+"""Shared fixtures for the whole suite.
 
-Здесь живут три вещи, без которых тесты становятся хрупкими:
-  1. изолированная база на каждый тест (in-memory SQLite);
-  2. подмена зависимости get_db, чтобы приложение работало с этой базой;
-  3. фабрики — помощники, создающие данные, а не копипаста JSON в каждом тесте.
+Three things live here, and without them the tests become brittle:
+  1. an isolated database per test (in-memory SQLite);
+  2. an override of the get_db dependency so the app talks to that database;
+  3. factories — helpers that create data instead of copy-pasted JSON.
 """
 
 import os
 import sys
 from pathlib import Path
 
-# Отключаем автосоздание рабочей базы до импорта приложения.
+# Disable creation of the production database before the app is imported.
 os.environ["SKLADNA_SKIP_INIT"] = "1"
 
 import pytest
@@ -19,7 +19,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Чтобы `import app` работал при запуске pytest из любой папки.
+# Make `import app` work no matter which directory pytest is started from.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import Base, get_db  # noqa: E402
@@ -28,11 +28,11 @@ from app.main import app  # noqa: E402
 
 @pytest.fixture()
 def engine():
-    """Свежая in-memory база на каждый тест: тесты не видят данных друг друга."""
+    """A fresh in-memory database per test: tests never see each other's data."""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,  # один и тот же коннект на все запросы
+        poolclass=StaticPool,  # one and the same connection for every request
     )
     Base.metadata.create_all(engine)
     yield engine
@@ -42,7 +42,7 @@ def engine():
 
 @pytest.fixture()
 def db_session(engine):
-    """Прямой доступ к базе — для проверок в обход API."""
+    """Direct database access — for assertions made around the API."""
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     session = Session()
     try:
@@ -53,7 +53,7 @@ def db_session(engine):
 
 @pytest.fixture()
 def client(engine):
-    """HTTP-клиент к приложению, подключённый к тестовой базе."""
+    """HTTP client wired to the test database."""
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     def _override_get_db():
@@ -71,11 +71,11 @@ def client(engine):
 
 @pytest.fixture()
 def client_raw(engine):
-    """Второй клиент: не пробрасывает исключения сервера наружу.
+    """A second client that does not re-raise server exceptions.
 
-    Обычный TestClient при ошибке внутри эндпоинта поднимает исключение прямо
-    в тесте — удобно для отладки, но прячет реальный ответ 500. Этот клиент
-    ведёт себя как настоящий клиент и показывает, что увидел бы пользователь.
+    The regular TestClient propagates an exception from inside the endpoint
+    straight into the test — handy for debugging, but it hides the real 500
+    response. This one behaves like a real client and shows what a user sees.
     """
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
@@ -94,9 +94,9 @@ def client_raw(engine):
 
 @pytest.fixture()
 def make_product(client):
-    """Фабрика товара: значения по умолчанию + возможность переопределить любое поле."""
+    """Product factory: sensible defaults plus the ability to override any field."""
 
-    def _make(sku: str = "SKU-001", name: str = "Ноутбук", price_cents: int = 100_000, stock: int = 10):
+    def _make(sku: str = "SKU-001", name: str = "Laptop", price_cents: int = 100_000, stock: int = 10):
         response = client.post(
             "/products",
             json={"sku": sku, "name": name, "price_cents": price_cents, "stock": stock},
@@ -109,7 +109,7 @@ def make_product(client):
 
 @pytest.fixture()
 def make_reservation(client):
-    """Фабрика резерва по SKU."""
+    """Reservation factory, addressed by SKU."""
 
     def _make(sku: str, quantity: int = 1):
         response = client.post(f"/products/{sku}/reserve", json={"quantity": quantity})
@@ -121,7 +121,7 @@ def make_reservation(client):
 
 @pytest.fixture()
 def make_order(client):
-    """Фабрика заказа из готовых резервов."""
+    """Order factory built from existing reservations."""
 
     def _make(reservation_ids: list[int], discount_percent: int = 0):
         response = client.post(
@@ -132,5 +132,4 @@ def make_order(client):
         return response.json()
 
     return _make
-
 

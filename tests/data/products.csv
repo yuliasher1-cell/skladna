@@ -1,7 +1,7 @@
 sku,name,price_cents,stock
-CSV-001,Клавиатура,3500,12
-CSV-002,Мышка,1200,40
-CSV-003,Коврик,400,7
-CSV-004,Гарнитура,8900,3
-CSV-005,Веб-камера,6500,0
+CSV-001,Keyboard,3500,12
+CSV-002,Mouse,1200,40
+CSV-003,Mousepad,400,7
+CSV-004,Headset,8900,3
+CSV-005,Webcam,6500,0
 

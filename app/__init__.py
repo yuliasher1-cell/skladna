@@ -1,2 +1,2 @@
-"""Пакет приложения Skladna."""
+"""Skladna application package."""
 

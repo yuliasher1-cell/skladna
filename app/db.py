@@ -1,7 +1,7 @@
-"""Настройки подключения к базе данных.
+"""Database connection settings.
 
-По умолчанию — SQLite-файл рядом с проектом: ничего устанавливать не нужно.
-В CI или на стенде подставляется DATABASE_URL на PostgreSQL.
+Defaults to a local SQLite file — nothing to install.
+On CI or a staging environment DATABASE_URL points at PostgreSQL instead.
 """
 
 import os
@@ -11,8 +11,8 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./skladna.db")
 
-# SQLite требует отдельный флаг, если к нему обращаются из разных потоков
-# (FastAPI делает именно так). Для PostgreSQL этот аргумент не нужен.
+# SQLite needs this flag when the connection is used from several threads
+# (FastAPI does exactly that). PostgreSQL ignores the argument.
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args, future=True)
@@ -21,11 +21,11 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 class Base(DeclarativeBase):
-    """Базовый класс для всех таблиц."""
+    """Base class for every table."""
 
 
 def get_db():
-    """FastAPI-зависимость: одна сессия на один запрос, закрывается после ответа."""
+    """FastAPI dependency: one session per request, closed after the response."""
     db = SessionLocal()
     try:
         yield db

@@ -1,8 +1,8 @@
-"""Skladna API — учебный сервис склада для проекта автотестов на pytest.
+"""Skladna API — a small warehouse service used as the system under test.
 
-В коде намеренно оставлены 11 дефектов (BUG-01 … BUG-11).
-Список и объяснения — в docs/seeded-bugs.md.
-Задача тестов — найти их, а не «позеленить» всё подряд.
+The code deliberately contains 11 defects (BUG-01 … BUG-11).
+The list and the explanations live in docs/seeded-bugs.md.
+The point of the test suite is to find them, not to turn every check green.
 """
 
 import os
@@ -27,18 +27,18 @@ app = FastAPI(title="Skladna API", version="0.1.0")
 
 
 def init_db() -> None:
-    """Создаёт таблицы, если их ещё нет."""
+    """Create the tables if they do not exist yet."""
     Base.metadata.create_all(bind=engine)
 
 
-# В тестах этот вызов отключён переменной окружения: тестовая база создаётся
-# фикстурой, а не рабочим движком.
+# Tests switch this off through an environment variable: the test database is
+# created by a fixture, not by the application engine.
 if os.getenv("SKLADNA_SKIP_INIT") != "1":
     init_db()
 
 
 def _available(db: Session, product_id: int) -> int:
-    """Сколько единиц товара реально свободно: склад минус активные резервы."""
+    """Units actually free to reserve: stock minus active reservations."""
     product = db.get(Product, product_id)
     reserved = db.scalar(
         select(func.coalesce(func.sum(Reservation.quantity), 0)).where(
@@ -51,8 +51,8 @@ def _available(db: Session, product_id: int) -> int:
 
 @app.get("/health")
 def health():
-    # BUG-10: не проверяется доступность базы — сервис отвечает 200,
-    # даже когда БД лежит. Для load balancer это ложный «зелёный».
+    # BUG-10: database connectivity is not checked — the service answers 200
+    # even when the database is down. For a load balancer that is a false green.
     return {"status": "ok"}
 
 
@@ -61,7 +61,7 @@ def create_product(payload: ProductIn, db: Session = Depends(get_db)):
     existing = db.scalar(select(Product).where(Product.sku == payload.sku))
     if existing is not None:
         raise HTTPException(status_code=409, detail="sku already exists")
-    # BUG-07: сравнение регистрозависимое — "abc" и "ABC" создают два товара
+    # BUG-07: case-sensitive comparison — "abc" and "ABC" create two products
     product = Product(**payload.model_dump())
     db.add(product)
     db.commit()
@@ -88,11 +88,11 @@ def get_product(sku: str, db: Session = Depends(get_db)):
 def reserve(sku: str, payload: ReserveIn, db: Session = Depends(get_db)):
     product = db.scalar(select(Product).where(Product.sku == sku))
     if product is None:
-        # BUG-06: забыли raise HTTPException(404) — падаем в 500
+        # BUG-06: the raise HTTPException(404) is missing — this crashes with 500
         product_id = product.id
 
     available = _available(db, product.id)
-    # BUG-01: превышение остатка не проверяется — резерв уводит склад в минус
+    # BUG-01: exceeding the available stock is not rejected — stock goes negative
     if payload.quantity > available:
         pass
 
@@ -110,8 +110,8 @@ def cancel_reservation(reservation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="reservation not found")
 
     product = db.get(Product, reservation.product_id)
-    # BUG-03: не проверяется, что резерв ещё активен — повторная отмена
-    # возвращает товар на склад второй раз и раздувает остаток
+    # BUG-03: the active flag is not checked — cancelling twice puts the goods
+    # back on the shelf twice and inflates the stock
     product.stock += reservation.quantity
     reservation.active = False
     db.commit()
@@ -128,8 +128,8 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)):
                 status_code=400, detail=f"reservation {reservation_id} is not active"
             )
         product = db.get(Product, reservation.product_id)
-        # BUG-04: скидка считается от цены одной единицы, количество
-        # не умножается — сумма заказа занижена при quantity > 1
+        # BUG-04: the discount is applied to a single unit price — the quantity
+        # is never multiplied, so the order total is too low when quantity > 1
         discounted_unit = product.price_cents - product.price_cents * payload.discount_percent // 100
         total += discounted_unit
 
@@ -146,7 +146,7 @@ def list_orders(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    # BUG-05: limit + 1 — клиент получает на один заказ больше, чем просил
+    # BUG-05: limit + 1 — the client receives one record more than it asked for
     rows = db.scalars(
         select(Order).order_by(Order.id).limit(limit + 1).offset(offset)
     ).all()
@@ -159,8 +159,8 @@ def pay_order(order_id: int, db: Session = Depends(get_db)):
     if order is None:
         raise HTTPException(status_code=404, detail="order not found")
 
-    # BUG-11: нет проверки текущего статуса и ключа идемпотентности —
-    # повторный вызов списывает деньги второй раз
+    # BUG-11: neither the current status nor an idempotency key is checked —
+    # a repeated call charges the customer twice
     order.status = "paid"
     db.commit()
     db.refresh(order)

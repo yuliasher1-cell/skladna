@@ -1,3 +1,4 @@
-# Драйвер PostgreSQL — нужен только на стенде и в CI, локально работаем на SQLite.
+# PostgreSQL driver — needed only on the local stand and in CI.
+# Locally the suite runs on SQLite and does not require it.
 psycopg[binary]==3.2.3
 

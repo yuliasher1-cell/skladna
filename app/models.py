@@ -1,4 +1,4 @@
-"""Таблицы: товары, резервы, заказы."""
+"""Tables: products, reservations, orders."""
 
 from datetime import datetime, timezone
 
@@ -9,11 +9,11 @@ from .db import Base
 
 
 def naive_utc_now() -> datetime:
-    """Текущее время UTC, но без часового пояса.
+    """Current UTC time, but without a timezone.
 
-    BUG-09 спрятан именно здесь: время наивное, tzinfo отсутствует.
-    Функция завёрнута отдельно, чтобы не использовать устаревший
-    datetime.utcnow() — в Python 3.12+ он помечен DeprecationWarning.
+    BUG-09 lives here: the value is naive, tzinfo is absent.
+    Wrapped in a function to avoid the deprecated datetime.utcnow(),
+    which raises a DeprecationWarning on Python 3.12+.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -45,7 +45,4 @@ class Order(Base):
     total_cents: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="created")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=naive_utc_now)
-
-
-
 

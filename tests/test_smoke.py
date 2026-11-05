@@ -1,7 +1,7 @@
-"""Быстрые smoke-тесты: сервис поднялся и основные сценарии не сломаны.
+"""Fast smoke checks: the service is up and the main flows still work.
 
-Эти пять тестов — то, что гоняется на каждый коммит. Они должны быть зелёными
-всегда; если один упал, дальше смотреть смысла нет.
+These five run on every commit. They must always be green; if one fails,
+there is no point looking further.
 """
 
 import pytest
@@ -17,7 +17,7 @@ def test_health_returns_ok(client):
 
 
 def test_create_product_returns_created(make_product):
-    product = make_product(sku="SKU-100", name="Монитор", price_cents=25_000, stock=5)
+    product = make_product(sku="SKU-100", name="Monitor", price_cents=25_000, stock=5)
 
     assert product["sku"] == "SKU-100"
     assert product["price_cents"] == 25_000
