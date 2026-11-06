@@ -35,7 +35,7 @@ class Reservation(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     quantity: Mapped[int] = mapped_column(Integer)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=naive_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: naive_utc_now())
 
 
 class Order(Base):
@@ -44,5 +44,5 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     total_cents: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="created")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=naive_utc_now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: naive_utc_now())
 

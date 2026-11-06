@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from . import payments
 from .db import Base, engine, get_db
 from .models import Order, Product, Reservation
 from .schemas import (
@@ -161,12 +162,21 @@ def pay_order(order_id: int, db: Session = Depends(get_db)):
 
     # BUG-11: neither the current status nor an idempotency key is checked —
     # a repeated call charges the customer twice
+    try:
+        payment = payments.charge(order.id, order.total_cents)
+    except payments.PaymentDeclined as exc:
+        raise HTTPException(status_code=402, detail=f"payment declined: {exc}")
+    except payments.PaymentUnavailable as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
     order.status = "paid"
     db.commit()
     db.refresh(order)
     return {
         "order_id": order.id,
         "status": order.status,
-        "payment_id": f"pay_{order.id}",
+        "payment_id": payment.get("id"),
     }
+
+
 

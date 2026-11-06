@@ -20,6 +20,7 @@ BUG-10 is verified manually: stop the database and call `/health`.
 | BUG-09 | `models` | `datetime.utcnow()` — a naive timestamp with no timezone | `test_bug09_created_at_is_timezone_aware` | Medium |
 | BUG-10 | `health` | Database connectivity is not checked: 200 while the database is dead | manually: stop the DB, call `/health` | High |
 | BUG-11 | `pay_order` | No idempotency: a repeated payment succeeds | `test_bug11_double_payment_rejected` | Critical |
+| BUG-12 | `payments.charge` | A 5xx from the provider is not retried; a transient error becomes a customer-visible 502 | `test_server_error_is_retried_once` | Medium |
 
 ## How `xfail` is meant to be used
 
@@ -34,4 +35,5 @@ BUG-10 is verified manually: stop the database and call `/health`.
 So you cannot fix a bug and leave the marker behind: CI will not let you. That is
 the whole point of a strict `xfail` — the test doubles as documentation that cannot
 silently go stale.
+
 

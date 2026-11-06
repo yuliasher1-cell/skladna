@@ -92,6 +92,17 @@ def client_raw(engine):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def payment_env(monkeypatch):
+    """Point the payment client at a fake host for every test.
+
+    No test may reach the real provider: an unmocked call would fail fast on DNS
+    instead of hanging, and the address is the same in every test file.
+    """
+    monkeypatch.setenv("PAYMENT_API_URL", "http://payments.test")
+    monkeypatch.setenv("PAYMENT_TIMEOUT", "2")
+
+
 @pytest.fixture()
 def make_product(client):
     """Product factory: sensible defaults plus the ability to override any field."""
@@ -132,4 +143,5 @@ def make_order(client):
         return response.json()
 
     return _make
+
 

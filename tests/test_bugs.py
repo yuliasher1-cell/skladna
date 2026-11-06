@@ -9,7 +9,9 @@ This keeps the defect recorded in the repository instead of living in someone's
 memory. The bug number matches docs/seeded-bugs.md and the issue in the tracker.
 """
 
+import httpx
 import pytest
+import respx
 
 pytestmark = [pytest.mark.regression, pytest.mark.bug]
 
@@ -119,14 +121,22 @@ def test_bug09_created_at_is_timezone_aware(client, make_product, make_reservati
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-11: a second payment succeeds without an error")
+@respx.mock
 def test_bug11_double_payment_rejected(client, make_product, make_reservation, make_order):
     make_product(sku="SKU-B11", price_cents=5_000, stock=5)
     reservation = make_reservation("SKU-B11", quantity=1)
     order = make_order([reservation["id"]])
+
+    # The provider is mocked: this test is about our own idempotency, not about HTTP.
+    respx.post("http://payments.test/v1/charges").mock(
+        return_value=httpx.Response(200, json={"id": "ch_test"})
+    )
 
     first = client.post(f"/orders/{order['id']}/pay")
     second = client.post(f"/orders/{order['id']}/pay")
 
     assert first.status_code == 200
     assert second.status_code == 409, "the order is already paid — charging again is not allowed"
+
+
 

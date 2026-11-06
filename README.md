@@ -13,9 +13,10 @@ data-driven cases from CSV and a CI pipeline across three Python versions.
 
 | Metric | Value |
 |---|---|
-| Tests collected | 42 |
-| Passing | 31 |
-| Documented defects (`xfail`) | 11 |
+| Tests collected | 63 |
+| Passing | 50 |
+| Documented defects (`xfail`) | 13 |
+| Coverage of `app/` | 95 % |
 | Full run time | ~1.2 s |
 | CI matrix | Python 3.11 / 3.12 / 3.13 |
 
@@ -24,13 +25,14 @@ data-driven cases from CSV and a CI pipeline across three Python versions.
 - **Products** — creation, retrieval by SKU, stock and availability
 - **Reservations** — reserving against stock, cancellation, available-stock maths
 - **Orders** — building an order from reservations, discounts, pagination
-- **Payments** — paying an order
+- **Payments** — charging an order through an external provider, with every
+  failure mode mocked: decline, timeout, 5xx, unreachable host, malformed body
 - **Negative paths** — validation errors, unknown SKUs, conflicting data
 - **Known defects** — one test per bug, pinned with `xfail(strict=True)`
 
 ## Stack
 
-`Python` · `pytest` · `FastAPI` · `SQLAlchemy 2` · `Pydantic 2` · `httpx` · `GitHub Actions`
+`Python` · `pytest` · `FastAPI` · `SQLAlchemy 2` · `Pydantic 2` · `httpx` · `respx` · `GitHub Actions`
 
 The database is in-memory SQLite by default, so the suite needs no external services.
 Setting `DATABASE_URL` switches it to PostgreSQL without touching a single test.
@@ -46,7 +48,7 @@ py -m venv .venv
 Expected output:
 
 ```
-31 passed, 11 xfailed in 1.23s
+50 passed, 13 xfailed in 1.21s
 ```
 
 Useful variants:
@@ -78,13 +80,16 @@ skladna/
 │   ├── db.py            engine, session factory, get_db dependency
 │   ├── models.py        products, reservations, orders
 │   ├── schemas.py       Pydantic request and response models
-│   └── main.py          endpoints + 11 seeded defects
+│   ├── payments.py      client for the external payment provider
+│   └── main.py          endpoints + seeded defects
 ├── tests/
 │   ├── conftest.py                    fixtures: engine, client, client_raw, factories
 │   ├── test_smoke.py                  5 fast tests, always green
 │   ├── test_bugs.py                   11 defect tests, xfail(strict=True)
 │   ├── test_products_parametrized.py  parametrization, indirect fixtures, validation
 │   ├── test_csv_cases.py              data-driven cases via pytest_generate_tests
+│   ├── test_payments_mocked.py        external provider mocked with respx
+│   ├── test_time_and_logs.py          monkeypatch, caplog, capfd
 │   └── data/products.csv              the data set for those cases
 ├── docs/
 │   └── seeded-bugs.md   every defect: where, what, how to catch it, priority
@@ -106,6 +111,10 @@ skladna/
 | Parametrization with meaningful `ids` | `tests/test_products_parametrized.py` |
 | `indirect=True` — the parameter goes into the fixture | `stocked_product` in the same file |
 | Cases read from an external CSV | `tests/test_csv_cases.py` → `pytest_generate_tests` |
+| Third-party HTTP mocked with `respx` | `tests/test_payments_mocked.py` |
+| Frozen clock with `monkeypatch` | `tests/test_time_and_logs.py` → `naive_utc_now` |
+| Assertions on log records with `caplog` | `tests/test_time_and_logs.py` |
+| Capturing stdout with `capfd` | `tests/test_time_and_logs.py` |
 | Custom markers with `--strict-markers` | `pytest.ini`, `pytestmark` in the tests |
 | `xfail(strict=True)` as defect documentation | `tests/test_bugs.py` |
 | Readable run summary | `addopts = -ra` in `pytest.ini` |
@@ -129,12 +138,30 @@ Every push to `main` and every pull request runs the suite on Python 3.11, 3.12 
 3.13: smoke tests first, then the full run with coverage, and the JUnit report is
 uploaded as a build artifact.
 
+## Testing a third party without touching it
+
+The payment provider is a separate service and a test must never call it: it is slow,
+unreliable, and it charges real cards. The HTTP layer is intercepted with `respx`, so
+every failure mode is reproducible in a millisecond:
+
+| Provider answers | What the API does | Why |
+|---|---|---|
+| `200` with a charge id | `200`, order becomes `paid` | happy path |
+| `402` declined | `402`, order stays `created` | the customer's problem |
+| timeout | `502` | the provider's problem |
+| `500` | `502` | the provider's problem |
+| connection refused | `502` | the provider's problem |
+
+A decline and an outage are deliberately different statuses: retrying a declined card
+is pointless, retrying a timeout is not.
+
 ## Roadmap
 
 - [x] Fixtures, database isolation, factories
 - [x] Parametrization and data-driven cases from CSV
 - [x] CI with a version matrix
-- [ ] External payment API mocked with `respx`, `monkeypatch` for time
+- [x] External payment API mocked with `respx`, `monkeypatch` for time and config
+- [x] Log assertions with `caplog`
 - [ ] Parallel run with `pytest-xdist`, flaky-check with `--random-order`
 - [ ] Allure report
 
