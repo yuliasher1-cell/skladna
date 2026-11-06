@@ -13,8 +13,8 @@ data-driven cases from CSV and a CI pipeline across three Python versions.
 
 | Metric | Value |
 |---|---|
-| Tests collected | 63 |
-| Passing | 50 |
+| Tests collected | 67 |
+| Passing | 54 |
 | Documented defects (`xfail`) | 13 |
 | Coverage of `app/` | 95 % |
 | Full run time | ~1.2 s |
@@ -48,7 +48,7 @@ py -m venv .venv
 Expected output:
 
 ```
-50 passed, 13 xfailed in 1.21s
+54 passed, 13 xfailed in 1.23s
 ```
 
 Useful variants:
@@ -90,7 +90,11 @@ skladna/
 │   ├── test_csv_cases.py              data-driven cases via pytest_generate_tests
 │   ├── test_payments_mocked.py        external provider mocked with respx
 │   ├── test_time_and_logs.py          monkeypatch, caplog, capfd
+│   ├── test_isolation.py              proof that tests share no state
 │   └── data/products.csv              the data set for those cases
+├── scripts/
+│   ├── measure.ps1      serial vs parallel timing on this machine
+│   └── flaky_check.ps1  N runs in random order, stops at the first difference
 ├── docs/
 │   └── seeded-bugs.md   every defect: where, what, how to catch it, priority
 ├── .github/workflows/tests.yml        CI across three Python versions
@@ -115,6 +119,8 @@ skladna/
 | Frozen clock with `monkeypatch` | `tests/test_time_and_logs.py` → `naive_utc_now` |
 | Assertions on log records with `caplog` | `tests/test_time_and_logs.py` |
 | Capturing stdout with `capfd` | `tests/test_time_and_logs.py` |
+| Proof of isolation between tests | `tests/test_isolation.py` |
+| Parallel run and randomised order | `scripts/measure.ps1`, `scripts/flaky_check.ps1` |
 | Custom markers with `--strict-markers` | `pytest.ini`, `pytestmark` in the tests |
 | `xfail(strict=True)` as defect documentation | `tests/test_bugs.py` |
 | Readable run summary | `addopts = -ra` in `pytest.ini` |
@@ -132,11 +138,65 @@ test that fails on purpose:
 The test list therefore stays a live description of the system's known problems.
 Details on all 11 defects: [`docs/seeded-bugs.md`](docs/seeded-bugs.md).
 
+## Parallelism and order independence
+
+The suite is designed so that every test can run on its own: each one gets a fresh
+in-memory database, a fresh client, and a patched environment. That is what makes
+`-n` and random order possible at all, and `tests/test_isolation.py` checks it
+directly instead of trusting the fixture code.
+
+```bash
+# parallel
+.venv\Scripts\python.exe -m pytest -n 4
+
+# random order, reproducible seed
+.venv\Scripts\python.exe -m pytest --random-order --random-order-seed=12345
+```
+
+### Measured, not assumed
+
+| What was measured | Result |
+|---|---|
+| Full suite, one process | ~1.9 s |
+| 10 runs, random order, random seeds | identical outcome every time: `54 passed, 13 xfailed` |
+| Slowest and fastest random run | 1.82 s / 2.09 s |
+| Cores on the measuring machine | 16 |
+
+**On whether parallel is worth it here.** For a suite that finishes in two seconds,
+usually not: worker start-up costs more than the parallel gain, and a slower run is
+the honest result. On a single-core machine the same suite measured 1.29 s serial
+against 1.91 s with `-n 2`. `-n` is therefore deliberately **not** in `addopts` — it
+is available, and CI runs it, but the default stays serial so the numbers mean
+something.
+
+Measure on the target machine rather than trusting a rule of thumb:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\measure.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\measure.ps1 -Workers 8
+```
+
+The script prints both wall times, the speed-up, and a verdict — if the speed-up is
+under 1.2x it says so and tells you to leave `-n` out of `addopts`.
+
+**On flaky tests.** A flaky test is worse than a failing one: it teaches the team to
+ignore red. `scripts/flaky_check.ps1` repeats the suite in random order and stops at
+the first run whose result differs, printing the seed needed to reproduce it. It
+compares outcomes, not timings:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\flaky_check.ps1 -Runs 20
+```
+
 ## CI
 
-Every push to `main` and every pull request runs the suite on Python 3.11, 3.12 and
-3.13: smoke tests first, then the full run with coverage, and the JUnit report is
-uploaded as a build artifact.
+Two jobs run on every push to `main` and every pull request:
+
+1. **`pytest`** — the reference run: Python 3.11, 3.12 and 3.13, smoke tests first,
+   then the full run with coverage. The JUnit report is uploaded as a build artifact.
+2. **`order-independence`** — the same suite five times in random order, then once on
+   four workers. A green reference run says the code works; these say the *tests* can
+   be trusted, because nothing depends on the order or on another test's leftovers.
 
 ## Testing a third party without touching it
 
@@ -162,7 +222,7 @@ is pointless, retrying a timeout is not.
 - [x] CI with a version matrix
 - [x] External payment API mocked with `respx`, `monkeypatch` for time and config
 - [x] Log assertions with `caplog`
-- [ ] Parallel run with `pytest-xdist`, flaky-check with `--random-order`
+- [x] Isolation tests, parallel run with `pytest-xdist`, flaky check with `--random-order`
 - [ ] Allure report
 
 ## Running against PostgreSQL

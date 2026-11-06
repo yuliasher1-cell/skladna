@@ -7,3 +7,5 @@ pytest>=8.3
 pytest-cov>=6.0
 respx>=0.22
 
+pytest-xdist>=3.6
+pytest-random-order>=1.1

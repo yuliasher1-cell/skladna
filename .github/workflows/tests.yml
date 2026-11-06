@@ -7,6 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The reference run: one process, fixed order. If this is red, something is
+  # genuinely broken; the jobs below only add confidence.
   pytest:
     runs-on: ubuntu-latest
     strategy:
@@ -40,4 +42,33 @@ jobs:
           name: pytest-report-${{ matrix.python-version }}
           path: reports/
           if-no-files-found: ignore
+
+  # Parallel and randomised. Two things are checked here that the run above
+  # cannot check: that no test depends on the order, and that no test leaks
+  # state into another when they share the machine.
+  order-independence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Random order, five times
+        run: |
+          for run in 1 2 3 4 5; do
+            echo "::group::random run $run"
+            pytest -q --random-order
+            echo "::endgroup::"
+          done
+
+      - name: Parallel on four workers
+        run: pytest -q -n 4
 
