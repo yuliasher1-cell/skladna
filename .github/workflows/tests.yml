@@ -33,14 +33,32 @@ jobs:
         run: pytest -m smoke
 
       - name: Full run with coverage
-        run: pytest --junitxml=reports/junit.xml --cov=app --cov-report=term-missing
+        run: |
+          pytest --junitxml=reports/junit.xml \
+                 --cov=app --cov-report=term-missing \
+                 --alluredir=allure-results
 
-      - name: Upload the report
+      - name: Upload the JUnit report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-report-${{ matrix.python-version }}
           path: reports/
+          if-no-files-found: ignore
+
+      - name: Build the Allure report
+        if: always()
+        run: |
+          curl -sSL -o allure.tgz https://github.com/allure-framework/allure2/releases/download/2.30.0/allure-2.30.0.tgz
+          tar -zxf allure.tgz
+          ./allure-2.30.0/bin/allure generate allure-results --clean -o allure-report
+
+      - name: Upload the Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-${{ matrix.python-version }}
+          path: allure-report/
           if-no-files-found: ignore
 
   # Parallel and randomised. Two things are checked here that the run above

@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 
 import httpx
+import allure
 import pytest
 import respx
 
@@ -26,6 +27,9 @@ CHARGE_URL = "http://payments.test/v1/charges"
 
 # --- 1. Freeze time --------------------------------------------------------
 
+@allure.story("Frozen clock")
+@allure.title("created_at uses the frozen clock")
+@allure.severity(allure.severity_level.NORMAL)
 def test_created_at_uses_the_frozen_clock(client, monkeypatch):
     """A test must not depend on the wall clock — otherwise it is flaky by design.
 
@@ -45,11 +49,17 @@ def test_created_at_uses_the_frozen_clock(client, monkeypatch):
     assert reservation.json()["created_at"] == "2026-03-14T09:26:53.589793"
 
 
+@allure.story("Frozen clock")
+@allure.title("monkeypatch restores the real clock after the test")
+@allure.severity(allure.severity_level.MINOR)
 def test_created_at_returns_to_real_time_after_the_test(client, monkeypatch):
     """monkeypatch undoes itself: the next test sees the real clock again."""
     assert models.naive_utc_now() != datetime(2026, 3, 14, 9, 26, 53)
 
 
+@allure.story("Frozen clock")
+@allure.title("Two reservations share the frozen timestamp")
+@allure.severity(allure.severity_level.MINOR)
 def test_two_reservations_share_the_frozen_timestamp(client, monkeypatch):
     monkeypatch.setattr(models, "naive_utc_now", lambda: datetime(2026, 1, 1, 12, 0, 0))
 
@@ -65,6 +75,9 @@ def test_two_reservations_share_the_frozen_timestamp(client, monkeypatch):
 
 # --- 2. Patch configuration, not code -------------------------------------
 
+@allure.story("Configuration")
+@allure.title("The timeout comes from the environment")
+@allure.severity(allure.severity_level.NORMAL)
 def test_timeout_is_read_from_the_environment(monkeypatch):
     """The timeout comes from config, so the test checks the config is honoured."""
     captured = {}
@@ -91,6 +104,9 @@ def test_timeout_is_read_from_the_environment(monkeypatch):
     assert captured["base_url"] == "http://payments.test"
 
 
+@allure.story("Configuration")
+@allure.title("The provider URL comes from the environment")
+@allure.severity(allure.severity_level.NORMAL)
 def test_provider_url_is_read_from_the_environment(monkeypatch):
     captured = {}
 
@@ -118,6 +134,9 @@ def test_provider_url_is_read_from_the_environment(monkeypatch):
 # --- 3. Logs: the only trace production leaves behind ---------------------
 
 @respx.mock
+@allure.story("Logging")
+@allure.title("A successful charge is logged with the provider id")
+@allure.severity(allure.severity_level.NORMAL)
 def test_successful_charge_is_logged(caplog):
     caplog.set_level(logging.INFO, logger="app.payments")
     respx.post(CHARGE_URL).mock(return_value=httpx.Response(200, json={"id": "ch_log"}))
@@ -130,6 +149,9 @@ def test_successful_charge_is_logged(caplog):
 
 
 @respx.mock
+@allure.story("Logging")
+@allure.title("A decline is logged as a warning with the reason")
+@allure.severity(allure.severity_level.NORMAL)
 def test_declined_charge_is_logged_as_warning(caplog):
     caplog.set_level(logging.INFO, logger="app.payments")
     respx.post(CHARGE_URL).mock(
@@ -145,6 +167,9 @@ def test_declined_charge_is_logged_as_warning(caplog):
 
 
 @respx.mock
+@allure.story("Logging")
+@allure.title("A timeout is logged as an error with the timeout value")
+@allure.severity(allure.severity_level.NORMAL)
 def test_timeout_is_logged_as_error_with_the_timeout_value(caplog):
     caplog.set_level(logging.INFO, logger="app.payments")
     respx.post(CHARGE_URL).mock(side_effect=httpx.ReadTimeout("timed out"))
@@ -157,6 +182,9 @@ def test_timeout_is_logged_as_error_with_the_timeout_value(caplog):
     assert "2.0s" in errors[0].getMessage(), errors[0].getMessage()
 
 
+@allure.story("Logging")
+@allure.title("An unexpected provider status is logged")
+@allure.severity(allure.severity_level.MINOR)
 def test_unexpected_status_is_logged(caplog, monkeypatch):
     caplog.set_level(logging.INFO, logger="app.payments")
 
@@ -183,6 +211,9 @@ def test_unexpected_status_is_logged(caplog, monkeypatch):
 
 # --- 4. capfd: when the code prints instead of logging --------------------
 
+@allure.story("Stdout")
+@allure.title("Printed output is captured with capfd")
+@allure.severity(allure.severity_level.MINOR)
 def test_stdout_can_be_captured(capfd):
     """Legacy code prints. capfd catches it without touching the source."""
     print("legacy report: 3 orders processed")
@@ -194,6 +225,9 @@ def test_stdout_can_be_captured(capfd):
 
 # --- 5. Patching a function instead of the network ------------------------
 
+@allure.story("Error mapping")
+@allure.title("The endpoint maps a client exception to 502")
+@allure.severity(allure.severity_level.NORMAL)
 def test_endpoint_returns_502_when_the_client_raises(client, monkeypatch, make_product, make_reservation, make_order):
     """The narrowest mock there is: replace one function, check the translation.
 

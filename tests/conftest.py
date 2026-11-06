@@ -13,6 +13,7 @@ from pathlib import Path
 # Disable creation of the production database before the app is imported.
 os.environ["SKLADNA_SKIP_INIT"] = "1"
 
+import allure
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -24,6 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+
+from api_client import ApiClient  # noqa: E402
 
 
 @pytest.fixture()
@@ -65,7 +68,7 @@ def client(engine):
 
     app.dependency_overrides[get_db] = _override_get_db
     with TestClient(app) as test_client:
-        yield test_client
+        yield ApiClient(transport=test_client)
     app.dependency_overrides.clear()
 
 
@@ -88,7 +91,7 @@ def client_raw(engine):
 
     app.dependency_overrides[get_db] = _override_get_db
     with TestClient(app, raise_server_exceptions=False) as test_client:
-        yield test_client
+        yield ApiClient(transport=test_client)
     app.dependency_overrides.clear()
 
 
@@ -145,3 +148,48 @@ def make_order(client):
     return _make
 
 
+# ── Reporting ───────────────────────────────────────────────────────────────
+
+# The Allure feature is derived from the module name, so a new test file shows up
+# in the report in the right place without any extra decoration.
+FEATURE_BY_MODULE = {
+    "test_smoke": "Smoke",
+    "test_bugs": "Known defects",
+    "test_products_parametrized": "Products",
+    "test_csv_cases": "Products",
+    "test_payments_mocked": "Payments",
+    "test_time_and_logs": "Time, config and logs",
+    "test_isolation": "Test-suite hygiene",
+}
+
+
+@pytest.fixture(autouse=True)
+def allure_labels(request):
+    """Give every test an epic and a feature, even one nobody annotated."""
+    module = getattr(request.node, "module", None)
+    module_name = module.__name__.split(".")[-1] if module else ""
+    allure.dynamic.epic("Skladna API")
+    allure.dynamic.feature(FEATURE_BY_MODULE.get(module_name, module_name or "Other"))
+    allure.dynamic.suite(module_name or "Other")
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item, call):
+    """On failure, attach what the API actually sent and received.
+
+    A traceback tells you where the assertion broke. It rarely tells you whether
+    the request was wrong or the service was. This does: every call, in order,
+    with the body that went out and the body that came back.
+    """
+    report = yield
+
+    if report.when == "call" and report.failed:
+        for name in ("client", "client_raw"):
+            api_client = item.funcargs.get(name)
+            if isinstance(api_client, ApiClient) and api_client.calls:
+                text = api_client.as_text()
+                allure.attach(text, name="HTTP calls", attachment_type=allure.attachment_type.TEXT)
+                print("\n--- HTTP calls ---\n" + text)
+                break
+
+    return report

@@ -91,6 +91,7 @@ skladna/
 │   ├── test_payments_mocked.py        external provider mocked with respx
 │   ├── test_time_and_logs.py          monkeypatch, caplog, capfd
 │   ├── test_isolation.py              proof that tests share no state
+│   └── api_client.py                  TestClient wrapper that records every call
 │   └── data/products.csv              the data set for those cases
 ├── scripts/
 │   ├── measure.ps1      serial vs parallel timing on this machine
@@ -121,6 +122,8 @@ skladna/
 | Capturing stdout with `capfd` | `tests/test_time_and_logs.py` |
 | Proof of isolation between tests | `tests/test_isolation.py` |
 | Parallel run and randomised order | `scripts/measure.ps1`, `scripts/flaky_check.ps1` |
+| Allure labels, steps and attachments | `conftest.py`, `tests/test_payments_mocked.py` |
+| Recording HTTP calls for failure reports | `tests/api_client.py` |
 | Custom markers with `--strict-markers` | `pytest.ini`, `pytestmark` in the tests |
 | `xfail(strict=True)` as defect documentation | `tests/test_bugs.py` |
 | Readable run summary | `addopts = -ra` in `pytest.ini` |
@@ -160,14 +163,20 @@ directly instead of trusting the fixture code.
 | Full suite, one process | ~1.9 s |
 | 10 runs, random order, random seeds | identical outcome every time: `54 passed, 13 xfailed` |
 | Slowest and fastest random run | 1.82 s / 2.09 s |
+| Four workers (`-n 4`) on that same machine | 6.07 s |
 | Cores on the measuring machine | 16 |
 
-**On whether parallel is worth it here.** For a suite that finishes in two seconds,
-usually not: worker start-up costs more than the parallel gain, and a slower run is
-the honest result. On a single-core machine the same suite measured 1.29 s serial
-against 1.91 s with `-n 2`. `-n` is therefore deliberately **not** in `addopts` — it
-is available, and CI runs it, but the default stays serial so the numbers mean
-something.
+**On whether parallel is worth it here: measured, and it is not.** On a 16-core
+Windows machine the same suite took **1.9 s serial and 6.07 s on four workers** — three
+times slower. That is not a bug in the tests: on Windows every xdist worker is a fresh
+process that has to import the whole FastAPI/SQLAlchemy/Pydantic stack, and antivirus
+inspects each one as it starts. For a two-second suite the start-up cost is larger than
+the work being split.
+
+`-n` is therefore deliberately **not** in `addopts`: it is available, CI runs it to
+prove the suite is parallel-safe, but the default stays serial so a local run is as
+fast as it can be. This is the honest engineering answer — the tool is there for the
+day the suite grows past a few seconds, not as decoration in the config.
 
 Measure on the target machine rather than trusting a rule of thumb:
 
@@ -188,6 +197,47 @@ compares outcomes, not timings:
 powershell -ExecutionPolicy Bypass -File .\scripts\flaky_check.ps1 -Runs 20
 ```
 
+## Reporting with Allure
+
+pytest's console output answers "did it pass". A report answers "what happened", and
+that is what a reviewer or a teammate actually needs.
+
+```bash
+.venv\Scripts\python.exe -m pytest --alluredir=allure-results
+```
+
+The results are raw JSON; to view them as a report you need the Allure command line
+(Java required):
+
+```bash
+allure serve allure-results
+```
+
+What the report contains, and why each part exists:
+
+| Element | Source | Why it matters |
+|---|---|---|
+| Epic / feature / story | `allure.dynamic` in `conftest.py`, `@allure.story` per test | a hundred tests become a readable map of the product |
+| Titles | `@allure.title` | "BUG-04 order total" instead of `test_bug04_order_total_counts_every_unit` |
+| Severity | `@allure.severity` | tells a reviewer what a red run actually blocks |
+| Steps | `allure.step` in the payment tests | shows *where* a flow broke, not just that it did |
+| HTTP calls on failure | `pytest_runtest_makereport` in `conftest.py` | the request and the response that the traceback does not show |
+| Captured logs | `caplog` | the only trace production leaves behind |
+
+The failure attachment is the part worth reading: on a red test the report carries
+every request the client made, in order, with the body sent and the body received:
+
+```
+GET /products/SKU-B04 -> 200
+  received: {'id': 1, 'sku': 'SKU-B04', 'price_cents': 10000, 'stock': 10}
+POST /orders -> 201
+  sent:     {'reservation_ids': [1], 'discount_percent': 0}
+  received: {'id': 1, 'total_cents': 10000, 'status': 'created', ...}
+```
+
+CI builds the report on every push and uploads it as an artifact, so a red run comes
+with an explanation attached instead of a request to reproduce it locally.
+
 ## CI
 
 Two jobs run on every push to `main` and every pull request:
@@ -197,6 +247,8 @@ Two jobs run on every push to `main` and every pull request:
 2. **`order-independence`** — the same suite five times in random order, then once on
    four workers. A green reference run says the code works; these say the *tests* can
    be trusted, because nothing depends on the order or on another test's leftovers.
+
+Each run of job 1 also builds an Allure report and uploads it as an artifact.
 
 ## Testing a third party without touching it
 
@@ -223,7 +275,7 @@ is pointless, retrying a timeout is not.
 - [x] External payment API mocked with `respx`, `monkeypatch` for time and config
 - [x] Log assertions with `caplog`
 - [x] Isolation tests, parallel run with `pytest-xdist`, flaky check with `--random-order`
-- [ ] Allure report
+- [x] Allure report with labels, steps and failure attachments
 
 ## Running against PostgreSQL
 

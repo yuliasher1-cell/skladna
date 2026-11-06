@@ -6,4 +6,6 @@ __pycache__/
 htmlcov/
 skladna.db
 .env
-
+allure-results/
+allure-report/
+reports/

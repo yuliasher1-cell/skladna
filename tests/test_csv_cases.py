@@ -9,6 +9,7 @@ exported to a file.
 import csv
 from pathlib import Path
 
+import allure
 import pytest
 
 pytestmark = pytest.mark.regression
@@ -41,6 +42,9 @@ def pytest_generate_tests(metafunc):
         )
 
 
+@allure.story("Data-driven")
+@allure.title("A product from the CSV survives a create-and-read round trip")
+@allure.severity(allure.severity_level.NORMAL)
 def test_products_from_csv_roundtrip(client, product_case):
     created = client.post("/products", json=product_case)
     assert created.status_code == 201, created.text

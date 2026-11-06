@@ -5,6 +5,7 @@ that, so a broken fixture shows up here instead of as a mysterious failure once
 someone adds `-n 4`.
 """
 
+import allure
 import pytest
 
 from app.models import Order, Product, Reservation
@@ -12,6 +13,9 @@ from app.models import Order, Product, Reservation
 pytestmark = pytest.mark.regression
 
 
+@allure.story("Isolation")
+@allure.title("Every test starts with an empty database")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_database_starts_empty(db_session):
     """Every test gets a fresh database — nothing survives from the previous one."""
     assert db_session.query(Product).count() == 0
@@ -19,6 +23,9 @@ def test_database_starts_empty(db_session):
     assert db_session.query(Order).count() == 0
 
 
+@allure.story("Isolation")
+@allure.title("Data from a previous test is not visible")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_data_from_a_previous_test_is_not_visible(client, make_product):
     """The fixture that ran before this test created a product; it must be gone.
 
@@ -33,6 +40,9 @@ def test_data_from_a_previous_test_is_not_visible(client, make_product):
     assert created.status_code == 201, "a product leaked in from another test"
 
 
+@allure.story("Isolation")
+@allure.title("Two clients on one engine do not leak data into each other")
+@allure.severity(allure.severity_level.NORMAL)
 def test_two_clients_do_not_share_a_database(engine):
     """Two clients built on the same engine still see separate test data."""
     from fastapi.testclient import TestClient
@@ -63,6 +73,9 @@ def test_two_clients_do_not_share_a_database(engine):
         app.dependency_overrides.clear()
 
 
+@allure.story("Isolation")
+@allure.title("A created product is visible inside the same test")
+@allure.severity(allure.severity_level.MINOR)
 def test_marker_and_slow_split(client, make_product):
     """A cheap check that the slow marker exists and nothing slow runs by default."""
     make_product(sku="MARK-1", stock=3)

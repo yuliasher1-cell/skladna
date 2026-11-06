@@ -10,6 +10,7 @@ memory. The bug number matches docs/seeded-bugs.md and the issue in the tracker.
 """
 
 import httpx
+import allure
 import pytest
 import respx
 
@@ -17,6 +18,9 @@ pytestmark = [pytest.mark.regression, pytest.mark.bug]
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-01: over-reserving is not rejected")
+@allure.story("BUG-01 over-reserving")
+@allure.title("Reserving more than available is rejected")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_bug01_reserve_more_than_available(client, make_product):
     """BUG-01: reserving more than available should return 409, not go negative."""
     make_product(sku="SKU-B01", stock=2)
@@ -27,6 +31,9 @@ def test_bug01_reserve_more_than_available(client, make_product):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-01: available stock goes negative")
+@allure.story("BUG-01 over-reserving")
+@allure.title("Available stock never goes negative")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_bug01_available_never_negative(client, make_product):
     make_product(sku="SKU-B01B", stock=2)
 
@@ -37,6 +44,9 @@ def test_bug01_available_never_negative(client, make_product):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-02: a negative reservation is not rejected")
+@allure.story("BUG-02 negative quantity")
+@allure.title("A negative reservation is rejected by validation")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_bug02_negative_quantity_rejected(client, make_product):
     make_product(sku="SKU-B02", stock=10)
 
@@ -46,6 +56,9 @@ def test_bug02_negative_quantity_rejected(client, make_product):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-03: a second cancellation restores the goods twice")
+@allure.story("BUG-03 double cancellation")
+@allure.title("A second cancellation does not inflate the stock")
+@allure.severity(allure.severity_level.NORMAL)
 def test_bug03_double_cancel_does_not_inflate_stock(client, make_product, make_reservation):
     make_product(sku="SKU-B03", stock=10)
     reservation = make_reservation("SKU-B03", quantity=4)
@@ -58,6 +71,9 @@ def test_bug03_double_cancel_does_not_inflate_stock(client, make_product, make_r
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-04: the discount is not multiplied by quantity")
+@allure.story("BUG-04 order total")
+@allure.title("The order total counts every unit")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_bug04_order_total_counts_every_unit(client, make_product, make_reservation, make_order):
     make_product(sku="SKU-B04", price_cents=10_000, stock=10)
     reservation = make_reservation("SKU-B04", quantity=3)
@@ -68,6 +84,9 @@ def test_bug04_order_total_counts_every_unit(client, make_product, make_reservat
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-05: pagination returns limit + 1 records")
+@allure.story("BUG-05 pagination")
+@allure.title("Pagination returns exactly the requested number of records")
+@allure.severity(allure.severity_level.MINOR)
 def test_bug05_pagination_respects_limit(client, make_product, make_reservation, make_order):
     make_product(sku="SKU-B05", price_cents=1_000, stock=100)
     for _ in range(3):
@@ -80,6 +99,9 @@ def test_bug05_pagination_respects_limit(client, make_product, make_reservation,
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-06: an unknown SKU returns 500 instead of 404")
+@allure.story("BUG-06 wrong status")
+@allure.title("Reserving an unknown SKU answers 404, not 500")
+@allure.severity(allure.severity_level.NORMAL)
 def test_bug06_reserve_unknown_sku_returns_404(client_raw):
     """BUG-06: an unknown SKU produces a 500 instead of a 404 (AttributeError)."""
     response = client_raw.post("/products/NOPE-B06/reserve", json={"quantity": 1})
@@ -88,6 +110,9 @@ def test_bug06_reserve_unknown_sku_returns_404(client_raw):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-07: SKU lookup is case-sensitive, duplicates are created")
+@allure.story("BUG-07 SKU case")
+@allure.title("SKU uniqueness is case-insensitive")
+@allure.severity(allure.severity_level.NORMAL)
 def test_bug07_sku_is_case_insensitive(client, make_product):
     make_product(sku="ABC-777")
     response = client.post(
@@ -99,6 +124,9 @@ def test_bug07_sku_is_case_insensitive(client, make_product):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-08: a negative price is accepted")
+@allure.story("BUG-08 negative price")
+@allure.title("A negative price is rejected by validation")
+@allure.severity(allure.severity_level.NORMAL)
 def test_bug08_negative_price_rejected(client):
     response = client.post(
         "/products",
@@ -109,6 +137,9 @@ def test_bug08_negative_price_rejected(client):
 
 
 @pytest.mark.xfail(strict=True, reason="BUG-09: created_at has no timezone")
+@allure.story("BUG-09 timestamps")
+@allure.title("created_at carries a timezone")
+@allure.severity(allure.severity_level.MINOR)
 def test_bug09_created_at_is_timezone_aware(client, make_product, make_reservation):
     make_product(sku="SKU-B09")
     reservation = make_reservation("SKU-B09")
@@ -122,6 +153,9 @@ def test_bug09_created_at_is_timezone_aware(client, make_product, make_reservati
 
 @pytest.mark.xfail(strict=True, reason="BUG-11: a second payment succeeds without an error")
 @respx.mock
+@allure.story("BUG-11 idempotency")
+@allure.title("A second payment is rejected")
+@allure.severity(allure.severity_level.CRITICAL)
 def test_bug11_double_payment_rejected(client, make_product, make_reservation, make_order):
     make_product(sku="SKU-B11", price_cents=5_000, stock=5)
     reservation = make_reservation("SKU-B11", quantity=1)

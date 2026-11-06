@@ -5,6 +5,7 @@ data: it shows up in the report, it is easy to extend, and a failing case is
 named by its id instead of "test number 47 failed".
 """
 
+import allure
 import pytest
 
 pytestmark = pytest.mark.regression
@@ -37,6 +38,9 @@ pytestmark = pytest.mark.regression
         ),
     ],
 )
+@allure.story("Availability")
+@allure.title("A created product exposes the expected availability")
+@allure.severity(allure.severity_level.NORMAL)
 def test_created_product_has_expected_available(client, payload, expected_available):
     created = client.post("/products", json=payload)
     assert created.status_code == 201, created.text
@@ -54,6 +58,9 @@ def test_created_product_has_expected_available(client, payload, expected_availa
     pytest.param([1, 2], 7, id="two-reservations"),
     pytest.param([3, 3, 3], 1, id="three-reservations"),
 ], )
+@allure.story("Availability")
+@allure.title("Available stock is the sum of all active reservations")
+@allure.severity(allure.severity_level.NORMAL)
 def test_available_is_sum_of_reservations(client, make_product, quantities, expected):
     make_product(sku="P-100", stock=10)
 
@@ -85,6 +92,9 @@ def test_available_is_sum_of_reservations(client, make_product, quantities, expe
         pytest.param({"sku": 123, "name": "SKU as int", "price_cents": 100}, "sku is not a string", id="sku-as-int"),
     ],
 )
+@allure.story("Validation")
+@allure.title("An invalid product payload is rejected with 422")
+@allure.severity(allure.severity_level.NORMAL)
 def test_invalid_product_payload_rejected(client, payload, reason):
     response = client.post("/products", json=payload)
 
@@ -94,6 +104,9 @@ def test_invalid_product_payload_rejected(client, payload, reason):
 # --- 4. Unknown SKUs: assert on the code and on the message -----------------
 
 @pytest.mark.parametrize("sku", ["NOPE-1", "nope-2", "NONE-3", "0"])
+@allure.story("Validation")
+@allure.title("An unknown SKU returns 404 with a readable detail")
+@allure.severity(allure.severity_level.MINOR)
 def test_unknown_sku_returns_404_with_detail(client, sku):
     response = client.get(f"/products/{sku}")
 
@@ -115,6 +128,9 @@ def stocked_product(client, make_product, request):
 
 
 @pytest.mark.parametrize("stocked_product", [0, 1, 5, 50], indirect=True)
+@allure.story("Availability")
+@allure.title("Stock and availability are equal before any reservation")
+@allure.severity(allure.severity_level.NORMAL)
 def test_product_with_various_stock_levels(client, stocked_product):
     sku = stocked_product["sku"]
 
